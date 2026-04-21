@@ -1,0 +1,22 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "dgx-cluster": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "DGX Spark Cluster",
+      "options": {
+        "baseURL": "http://192.168.200.11:8080/v1",
+        "apiKey": "not-needed"
+      },
+      "models": {
+        "local": {
+          "name": "Loaded Model (DGX Cluster)",
+          "limit": {
+            "context": 50000,
+            "output": 8192
+          }
+        }
+      }
+    }
+  }
+}

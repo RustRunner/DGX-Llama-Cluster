@@ -166,7 +166,7 @@ if [ -z "\$MODEL" ]; then
     echo "  -c, --ctx-size N       Context size (default: 32768)"
     echo "  -ngl N                 GPU layers (default: 999 = all)"
     echo "  --port N               API port (default: $SERVER_PORT)"
-    echo "  -np, --parallel N      Concurrent request slots (default: 2)"
+    echo "  -np, --parallel N      Concurrent request slots (default: 1, splits context)"
     echo "  -ctk TYPE              KV cache key type: f16, q8_0, q4_0 (default: q8_0)"
     echo "  -ctv TYPE              KV cache value type (default: q8_0)"
     echo "  -t N                   CPU threads (default: 16)"
@@ -232,7 +232,7 @@ exec llama-server \\
     -ub 4096 \\
     -ctk q8_0 \\
     -ctv q8_0 \\
-    --parallel 2 \\
+    --parallel 1 \\
     -t 16 \\
     \$RPC_FLAG \\
     \$EXTRA_ARGS
@@ -283,7 +283,7 @@ exec llama-server \\
     -c 32768 \\
     -b 2048 \\
     -ub 512 \\
-    --parallel 2 \\
+    --parallel 1 \\
     -t 16 \\
     "\$@"
 LOCALEOF
