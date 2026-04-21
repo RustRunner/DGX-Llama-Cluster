@@ -163,7 +163,7 @@ if [ -z "\$MODEL" ]; then
     find "\$MODELS_DIR" -name "*.gguf" \\( ! -name "*-of-*" -o -name "*-00001-of-*" \\) 2>/dev/null | head -1 | grep -q . || echo "  (none found)"
     echo ""
     echo "Options (pass after model path):"
-    echo "  -c, --ctx-size N       Context size (default: 32768)"
+    echo "  -c, --ctx-size N       Context size (default: 200000)"
     echo "  -ngl N                 GPU layers (default: 999 = all)"
     echo "  --port N               API port (default: $SERVER_PORT)"
     echo "  -np, --parallel N      Concurrent request slots (default: 1, splits context)"
@@ -227,7 +227,7 @@ exec llama-server \\
     -fa on \\
     --no-mmap \\
     --jinja \\
-    -c 32768 \\
+    -c 200000 \\
     -b 4096 \\
     -ub 4096 \\
     -ctk q8_0 \\
@@ -456,8 +456,8 @@ echo "  Selected: \$SELECTED"
 echo ""
 echo -e "\${GREEN}[3/3] Launch\${NC}"
 echo ""
-read -p "Context size (default: 32768): " CTX_SIZE
-CTX_SIZE="\${CTX_SIZE:-32768}"
+read -p "Context size (default: 200000): " CTX_SIZE
+CTX_SIZE="\${CTX_SIZE:-200000}"
 echo ""
 
 if [ "\$RPC_AVAILABLE" = true ]; then

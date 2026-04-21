@@ -12,8 +12,8 @@
         "local": {
           "name": "Loaded Model (DGX Cluster)",
           "limit": {
-            "context": 50000,
-            "output": 8192
+            "context": 200000,
+            "output": 32768
           }
         }
       }
