@@ -2,7 +2,9 @@
 
 Distributed LLM inference across NVIDIA DGX Spark nodes using [llama.cpp](https://github.com/ggml-org/llama.cpp) with CUDA GPU acceleration and RDMA networking.
 
-![DGX Spark Stack](assets/dgx-spark-stack.png)
+<p align="center">
+  <img src="assets/dgx-spark-stack.png" alt="DGX Spark Stack" width="600">
+</p>
 
 ## Architecture
 
