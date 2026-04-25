@@ -106,6 +106,24 @@ get_all_worker_ips() {
     echo "${ips[*]}"
 }
 
+# Find which of Node 1's RDMA IPs is reachable from this worker.
+# Asymmetric topologies (e.g., star with the worker on Node 1's secondary
+# port) put the worker on the same subnet as NODE1_IP2, not NODE1_IP, so
+# we can't assume NODE1_IP is reachable. Sets/exports NODE1_REACHABLE_IP.
+find_reachable_node1_ip() {
+    NODE1_REACHABLE_IP=""
+    for candidate in "$NODE1_IP" "$NODE1_IP2"; do
+        [[ -z "$candidate" ]] && continue
+        if ping -c 1 -W 2 "$candidate" &>/dev/null; then
+            NODE1_REACHABLE_IP="$candidate"
+            export NODE1_REACHABLE_IP
+            log "Reachable Node 1 IP: $NODE1_REACHABLE_IP"
+            return 0
+        fi
+    done
+    error "Cannot reach Node 1 on $NODE1_IP or $NODE1_IP2 — check RDMA cabling, netplan, and that Node 1 is online"
+}
+
 # ── ConnectX-7 interface detection ───────────────────────────
 # Sets: IFACE1, IFACE2
 detect_mlx5_interfaces() {

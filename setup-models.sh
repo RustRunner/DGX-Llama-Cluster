@@ -85,10 +85,13 @@ case "$NODE_NUM" in
 *)
     log "Setting up NFS model mount on Node $NODE_NUM"
 
+    # Resolve which Node 1 IP we can actually reach (asymmetric topologies)
+    find_reachable_node1_ip
+
     # Discover Node 1's export
-    NODE1_EXPORT=$(showmount -e "$NODE1_IP" --no-headers 2>/dev/null | awk '{print $1}' | grep '\.lmstudio/models' | head -1)
+    NODE1_EXPORT=$(showmount -e "$NODE1_REACHABLE_IP" --no-headers 2>/dev/null | awk '{print $1}' | grep '\.lmstudio/models' | head -1)
     if [[ -z "$NODE1_EXPORT" ]]; then
-        error "Could not find .lmstudio/models export on $NODE1_IP. Run setup-models.sh --node 1 on Node 1 first."
+        error "Could not find .lmstudio/models export on $NODE1_REACHABLE_IP. Run setup-models.sh --node 1 on Node 1 first."
     fi
     log "Discovered Node 1 export: $NODE1_EXPORT"
 
@@ -97,7 +100,7 @@ case "$NODE_NUM" in
     apt-get install -y nfs-common
 
     # Mount
-    log "Setting up mount: $NODE1_IP:$NODE1_EXPORT -> $MODELS_DIR"
+    log "Setting up mount: $NODE1_REACHABLE_IP:$NODE1_EXPORT -> $MODELS_DIR"
     mkdir -p "$MODELS_DIR"
 
     # Portable mount options so the node can boot away from the cluster:
@@ -107,14 +110,16 @@ case "$NODE_NUM" in
     #   soft    — return EIO instead of hanging forever on a dead server
     NFS_OPTS="ro,nofail,bg,_netdev,soft,timeo=50,retrans=2,nconnect=4"
 
-    # Always rewrite the entry so re-runs apply current options
-    if grep -q "$NODE1_IP:.*\.lmstudio/models" /etc/fstab 2>/dev/null; then
-        sed -i "\|$NODE1_IP:.*\.lmstudio/models|d" /etc/fstab
+    # Always rewrite the entry so re-runs apply current options. Match any
+    # existing .lmstudio/models line regardless of which IP it points at —
+    # this heals stale entries from a prior run that used the wrong subnet.
+    if grep -q '\.lmstudio/models' /etc/fstab 2>/dev/null; then
+        sed -i '\|\.lmstudio/models|d' /etc/fstab
         log "Updated fstab entry with portable mount options"
     else
         log "Added fstab entry with portable mount options"
     fi
-    echo "$NODE1_IP:$NODE1_EXPORT $MODELS_DIR nfs $NFS_OPTS 0 0" >> /etc/fstab
+    echo "$NODE1_REACHABLE_IP:$NODE1_EXPORT $MODELS_DIR nfs $NFS_OPTS 0 0" >> /etc/fstab
 
     # Mount if not already mounted
     if mountpoint -q "$MODELS_DIR" 2>/dev/null; then
@@ -134,10 +139,10 @@ case "$NODE_NUM" in
 
     # Done
     log "${GREEN}================================================${NC}"
-    log "${GREEN}  Node 2 Shared Models Setup Complete!${NC}"
+    log "${GREEN}  Node $NODE_NUM Shared Models Setup Complete!${NC}"
     log "${GREEN}================================================${NC}"
     echo ""
-    log "NFS mount: $NODE1_IP:$NODE1_EXPORT -> $MODELS_DIR (read-only)"
+    log "NFS mount: $NODE1_REACHABLE_IP:$NODE1_EXPORT -> $MODELS_DIR (read-only)"
     echo ""
     log "Models from Node 1 are now accessible here."
     log "The RPC worker will serve layers from these models"

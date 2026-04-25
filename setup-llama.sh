@@ -587,6 +587,9 @@ STOPALLEOF
 *)
     log "Setting up Node $NODE_NUM (Worker) RPC service..."
 
+    # Resolve which Node 1 IP we can actually reach (asymmetric topologies)
+    find_reachable_node1_ip
+
     # ── RPC worker systemd service ──────────────────────────
     cat > /etc/systemd/system/llama-rpc.service << EOF
 [Unit]
@@ -622,7 +625,9 @@ EOF
     # ── Status script (worker perspective) ──────────────────
     cat > /usr/local/bin/cluster-status.sh << STATUSEOF
 #!/bin/bash
-NODE1_IP="$NODE1_IP"
+# NODE1_IP here is the IP that's actually reachable from this worker —
+# may be Node 1's secondary address for asymmetric (star) RDMA topologies.
+NODE1_IP="$NODE1_REACHABLE_IP"
 NODE_IP="$NODE_IP"
 RPC_PORT="$RPC_PORT"
 
@@ -687,7 +692,7 @@ STOPEOF
     log "  RDMA devices: ${ACTIVE_RDMA_DEVICES[*]}"
     log "  RDMA interface: $RDMA_NET_IFACE"
     log "  Node IP: $NODE_IP"
-    log "  Head node: $NODE1_IP"
+    log "  Head node: $NODE1_REACHABLE_IP"
     log "  GPU(s): $GPU_COUNT x $GPU_NAME"
     log "  CUDA: $CUDA_VERSION"
     log "  llama.cpp: $LLAMA_COMMIT (at $LLAMA_CPP_DIR)"
