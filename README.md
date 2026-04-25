@@ -86,6 +86,26 @@ cd ~/.lmstudio/models
 huggingface-cli download <org>/<model> --include '*Q4_K_M*' --local-dir .
 ```
 
+## Desktop Launcher (optional)
+
+For one-click access from the GNOME desktop on Node 1:
+
+```bash
+./install-launcher.sh        # no sudo — installs under ~/.local/share/
+```
+
+This generates icons at 256/128/64/48 px from `assets/dgx-spark-stack.png`, drops a `.desktop` file on your desktop and in `~/.local/share/applications/`, and pins it to the GNOME dock. Clicking the **DGX Spark Cluster** icon opens a terminal and runs `sudo start-everything.sh` — the same interactive launcher used above.
+
+If the desktop icon shows a gear overlay (GNOME's "Untrusted Application" state), right-click → **Allow Launching** to trust it. The dock icon may need a logout/login the first time it appears.
+
+To remove later:
+
+```bash
+./install-launcher.sh --remove
+```
+
+Requires `start-everything.sh` to already be installed (handled by `setup-llama.sh --node 1`) and Python Pillow for icon generation (auto-installed if missing).
+
 ## Scaling to 3+ Nodes
 
 1. Edit `cluster.conf`:
