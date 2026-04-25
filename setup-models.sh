@@ -100,13 +100,21 @@ case "$NODE_NUM" in
     log "Setting up mount: $NODE1_IP:$NODE1_EXPORT -> $MODELS_DIR"
     mkdir -p "$MODELS_DIR"
 
-    # Add fstab entry if not present
+    # Portable mount options so the node can boot away from the cluster:
+    #   nofail  — don't block boot if mount fails
+    #   bg      — retry in background after first foreground failure
+    #   _netdev — wait for network-online before attempting mount
+    #   soft    — return EIO instead of hanging forever on a dead server
+    NFS_OPTS="ro,nofail,bg,_netdev,soft,timeo=50,retrans=2,nconnect=4"
+
+    # Always rewrite the entry so re-runs apply current options
     if grep -q "$NODE1_IP:.*\.lmstudio/models" /etc/fstab 2>/dev/null; then
-        log "fstab entry already exists"
+        sed -i "\|$NODE1_IP:.*\.lmstudio/models|d" /etc/fstab
+        log "Updated fstab entry with portable mount options"
     else
-        echo "$NODE1_IP:$NODE1_EXPORT $MODELS_DIR nfs ro,hard,intr,nconnect=4 0 0" >> /etc/fstab
-        log "Added fstab entry"
+        log "Added fstab entry with portable mount options"
     fi
+    echo "$NODE1_IP:$NODE1_EXPORT $MODELS_DIR nfs $NFS_OPTS 0 0" >> /etc/fstab
 
     # Mount if not already mounted
     if mountpoint -q "$MODELS_DIR" 2>/dev/null; then

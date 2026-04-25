@@ -296,6 +296,20 @@ echo "7. RDMA Device to Netdev Mapping:"
 ibdev2netdev 2>/dev/null || echo "  ibdev2netdev not found"
 echo ""
 
+echo "8. llama.cpp RDMA Support:"
+for bin in /usr/local/bin/rpc-server /usr/local/bin/llama-server; do
+    if [ -x "$bin" ]; then
+        if ldd "$bin" 2>/dev/null | grep -q ibverbs; then
+            echo "  $(basename "$bin"): RDMA enabled (libibverbs linked)"
+        else
+            echo "  $(basename "$bin"): TCP only (libibverbs not linked — rebuild after installing libibverbs-dev)"
+        fi
+    else
+        echo "  $(basename "$bin"): not installed yet — run setup-llama.sh"
+    fi
+done
+echo ""
+
 echo "=== Verification Complete ==="
 VERIFYEOF
 

@@ -23,7 +23,7 @@ The cluster scales from 2 to N nodes. Node 1 is the head (runs `llama-server`), 
 | 3 | 384 GB | 400B+ parameters |
 | 4 | 512 GB | 600B+ parameters |
 
-Nodes connect via ConnectX-7 200GbE with RoCE (RDMA over Converged Ethernet). Currently routes TCP/IP over RoCE — once llama.cpp gains full RDMA support, TCP overhead will be eliminated automatically.
+Nodes connect via ConnectX-7 200GbE with RoCE (RDMA over Converged Ethernet). The `ggml-rpc` backend in llama.cpp uses native RDMA when `libibverbs` is detected at build time — auto-negotiated at runtime, no command-line flags. Setup scripts ensure the headers are present so RDMA is enabled by default; if they aren't, the backend transparently falls back to TCP/IP over RoCE. Verify which mode the installed binaries are using with `sudo verify-rdma.sh` (section 8).
 
 ## Quick Start
 

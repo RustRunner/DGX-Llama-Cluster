@@ -39,6 +39,15 @@ log "Installing build dependencies..."
 apt-get update -qq
 apt-get install -y -qq git cmake build-essential libcurl4-openssl-dev
 
+# ggml-rpc auto-enables native RDMA when libibverbs headers are present at cmake time.
+# MLNX OFED ships these; only pull from apt if missing, to avoid clobbering OFED's libs.
+if [[ ! -f /usr/include/infiniband/verbs.h ]]; then
+    log "libibverbs headers missing — installing libibverbs-dev"
+    apt-get install -y -qq libibverbs-dev
+else
+    log "libibverbs headers found (provided by MLNX OFED or system)"
+fi
+
 #######################################
 # Step 3: Build llama.cpp from Source
 #######################################
@@ -65,12 +74,31 @@ LLAMA_COMMIT=$(git rev-parse --short HEAD)
 log "llama.cpp commit: $LLAMA_COMMIT"
 
 log "Configuring cmake..."
+
+# ARM CPU tuning — override ARM_NATIVE_FLAG (the internal variable llama.cpp's
+# ggml-cpu CMakeLists uses for both feature probes and the actual ARCH_FLAGS).
+# Without this, auto-detect resolves to -mcpu=native, which on Grace + GCC 13
+# produces baseline armv8-a (no DotProd/SVE2/I8MM/BF16/FP16) because GCC's native
+# detection doesn't yet identify the Grace CPU profile.
+# Also pushing the same flag into CMAKE_*_FLAGS as belt-and-suspenders for any
+# code path that bypasses ARM_NATIVE_FLAG.
+ARM_CPU_FLAG=()
+if [[ "$(uname -m)" = "aarch64" ]] && [[ -n "${ARM_CPU:-}" ]]; then
+    ARM_CPU_FLAG=(
+        -DARM_NATIVE_FLAG="-mcpu=$ARM_CPU"
+        -DCMAKE_C_FLAGS="-mcpu=$ARM_CPU"
+        -DCMAKE_CXX_FLAGS="-mcpu=$ARM_CPU"
+    )
+    log "ARM CPU tuning: -mcpu=$ARM_CPU (via ARM_NATIVE_FLAG override)"
+fi
+
 cmake -B build \
     -DGGML_CUDA=ON \
     -DGGML_RPC=ON \
     -DGGML_CURL=ON \
     -DCMAKE_CUDA_ARCHITECTURES="$CUDA_ARCH" \
-    -DCMAKE_BUILD_TYPE=Release
+    -DCMAKE_BUILD_TYPE=Release \
+    "${ARM_CPU_FLAG[@]}"
 
 log "Compiling (this will take several minutes)..."
 cmake --build build --config Release -j"$(nproc)"
@@ -84,6 +112,15 @@ if ldd build/bin/llama-server | grep -q cuda; then
     log "CUDA linkage verified"
 else
     warn "CUDA not detected in binary. GPU offloading may not work."
+fi
+
+# RDMA linkage — ggml-rpc auto-uses RDMA at runtime when libibverbs is linked in.
+# Without it, RPC falls back to TCP (still works over RoCE, just higher latency / lower throughput).
+if ldd build/bin/rpc-server | grep -q ibverbs; then
+    log "${GREEN}RDMA linkage verified — rpc-server will use native RDMA${NC}"
+else
+    warn "RDMA NOT linked into rpc-server — RPC will fall back to TCP over RoCE"
+    warn "  Install libibverbs-dev (or MLNX OFED userspace) and re-run setup-llama.sh"
 fi
 
 #######################################
