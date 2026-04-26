@@ -1,4 +1,4 @@
-# DGX Llama Triple Decker
+# DGX Llama Cluster — Triple Decker Edition
 
 Three NVIDIA DGX Spark nodes wired in a star topology over ConnectX-7 RDMA, running [llama.cpp](https://github.com/ggml-org/llama.cpp) with CUDA acceleration to serve 400B+ parameter models from a single OpenAI-compatible HTTP endpoint.
 
