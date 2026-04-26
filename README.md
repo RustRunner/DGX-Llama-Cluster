@@ -137,6 +137,12 @@ End-to-end run on the cluster — `start-everything.sh` boots the model across a
   <img src="assets/llama-finish.png" alt="opencode audit complete, results written to disk" width="800">
 </p>
 
+**Quick test of WebUI inference.**
+
+<p align="center">
+  <img src="assets/llamacpp-web.png" alt="llama.cpp built-in WebUI rendering MiniMax-M2.7 reasoning + math" width="800">
+</p>
+
 ## Desktop Launcher (optional)
 
 For one-click access from the GNOME desktop on Node 1:
