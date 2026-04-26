@@ -1,41 +1,56 @@
-# DGX Spark Llama Cluster
+# DGX Llama Triple Decker
 
-Distributed LLM inference across NVIDIA DGX Spark nodes using [llama.cpp](https://github.com/ggml-org/llama.cpp) with CUDA GPU acceleration and RDMA networking.
+Three NVIDIA DGX Spark nodes wired in a star topology over ConnectX-7 RDMA, running [llama.cpp](https://github.com/ggml-org/llama.cpp) with CUDA acceleration to serve 400B+ parameter models from a single OpenAI-compatible HTTP endpoint.
 
 <p align="center">
-  <img src="assets/dgx-spark-stack.png" alt="DGX Spark Stack" width="600">
+  <img src="assets/triple-decker.jpeg" alt="DGX Llama Triple Decker" width="600">
 </p>
 
 ## Architecture
 
-The cluster scales from 2 to N nodes. Node 1 is the head (runs `llama-server`), all other nodes are workers (run `rpc-server`).
+Three DGX Spark nodes stacked into one logical inference cluster. **Node 1** (top) is the head — it runs `llama-server`, exposes the OpenAI-compatible HTTP API, and orchestrates the workers. **Nodes 2 and 3** each run `rpc-server` and contribute their full 128 GB of unified memory to the model.
 
-| | Node 1 (Head) | Node 2+ (Workers) |
-|---|---|---|
-| **Role** | `llama-server` — HTTP API | `rpc-server` — GPU compute |
-| **GPU** | NVIDIA GB10 — 128 GB unified memory | NVIDIA GB10 — 128 GB unified memory each |
-| **RDMA IP** | 192.168.200.11 / .201.11 | 192.168.200.1x / .201.1x |
-| **Key Port** | 8080 (API) | 50052 (RPC) |
+**Network — star topology, no switch:**
 
-| Nodes | Total VRAM | Model Size |
-|---|---|---|
-| 2 | 256 GB | 200B+ parameters |
-| 3 | 384 GB | 400B+ parameters |
-| 4 | 512 GB | 600B+ parameters |
+```
+                 ┌───────────────────────────────────┐
+                 │  Node 1  (Head — llama-server)    │
+                 │  192.168.200.11 / 192.168.201.11  │
+                 └─────────┬───────────────┬─────────┘
+              port A → :200/24       port B → :201/24
+                           │               │
+              ┌────────────┴───┐   ┌───────┴────────┐
+              │  Node 2 (RPC)  │   │  Node 3 (RPC)  │
+              │ 192.168.200.12 │   │ 192.168.201.13 │
+              └────────────────┘   └────────────────┘
+```
 
-Nodes connect via ConnectX-7 200GbE with RoCE (RDMA over Converged Ethernet). The `ggml-rpc` backend in llama.cpp uses native RDMA when `libibverbs` is detected at build time — auto-negotiated at runtime, no command-line flags. Setup scripts ensure the headers are present so RDMA is enabled by default; if they aren't, the backend transparently falls back to TCP/IP over RoCE. Verify which mode the installed binaries are using with `sudo verify-rdma.sh` (section 8).
+Two ConnectX-7 200GbE direct-attach cables, no switch required. Node 1 is the hub; Node 2 hangs off port A on the `192.168.200.0/24` subnet and Node 3 hangs off port B on the `192.168.201.0/24` subnet. The asymmetric subnet for Node 3 is intentional and handled by the setup scripts.
+
+| | Node 1 (Head) | Node 2 (Worker) | Node 3 (Worker) |
+|---|---|---|---|
+| **Role** | `llama-server` — HTTP API | `rpc-server` — GPU compute | `rpc-server` — GPU compute |
+| **GPU** | NVIDIA GB10 — 128 GB | NVIDIA GB10 — 128 GB | NVIDIA GB10 — 128 GB |
+| **RDMA IP** | 192.168.200.11 / 192.168.201.11 | 192.168.200.12 | 192.168.201.13 |
+| **Key Port** | 8080 (API) | 50052 (RPC) | 50052 (RPC) |
+
+**Total: 384 GB unified memory** — enough to load 400B+ parameter models in 4-bit quantization with room for KV cache.
+
+The `ggml-rpc` backend in llama.cpp uses native RDMA when `libibverbs` is detected at build time — auto-negotiated at runtime, no command-line flags. Setup scripts ensure the headers are present so RDMA is enabled by default; if they aren't, the backend transparently falls back to TCP/IP over RoCE. Verify which mode the installed binaries are using with `sudo verify-rdma.sh` (section 8).
 
 ## Quick Start
 
-Each node follows the same sequential flow. Each script tells you the next command to run on that node when it finishes, so you can just follow the chain.
+Run the same script trio on each node, in order. Each script prints the next command when it finishes, so you can follow the chain.
 
 ### 1. Edit Configuration
 
-All IPs, ports, and node count live in one file. To add a third node, uncomment `NODE3_IP` / `NODE3_IP2` and set `NODE_COUNT=3`:
+All IPs, ports, and node count live in one file:
 
 ```bash
 nano cluster.conf
 ```
+
+Defaults already match the diagram above (`NODE_COUNT=3`, star topology). Adjust IPs only if your network differs.
 
 ### 2. Reset (Optional — Fresh Start)
 
@@ -57,15 +72,23 @@ sudo ./setup-models.sh --node 1     # NFS server — exports models to workers
 ./install-launcher.sh               # optional — desktop icon (no sudo)
 ```
 
-On **each worker node** (2, 3, …):
+On **Node 2** (worker):
 
 ```bash
-sudo ./setup-rdma.sh   --node <N>   # configures ConnectX-7, reboots
-sudo ./setup-llama.sh  --node <N>   # builds llama.cpp, installs rpc-server service
-sudo ./setup-models.sh --node <N>   # NFS client — mounts models from Node 1
+sudo ./setup-rdma.sh   --node 2     # reboot
+sudo ./setup-llama.sh  --node 2     # installs rpc-server service
+sudo ./setup-models.sh --node 2     # NFS client — mounts models from Node 1
 ```
 
-That's it. Verify RDMA any time with `sudo verify-rdma.sh`.
+On **Node 3** (worker):
+
+```bash
+sudo ./setup-rdma.sh   --node 3     # reboot
+sudo ./setup-llama.sh  --node 3
+sudo ./setup-models.sh --node 3
+```
+
+That's it. Verify RDMA on any node with `sudo verify-rdma.sh`.
 
 ### 4. Launch a Model
 
@@ -94,7 +117,7 @@ For one-click access from the GNOME desktop on Node 1:
 ./install-launcher.sh        # no sudo — installs under ~/.local/share/
 ```
 
-This generates icons at 256/128/64/48 px from `assets/dgx-spark-stack.png`, drops a `.desktop` file on your desktop and in `~/.local/share/applications/`, and pins it to the GNOME dock. Clicking the **DGX Spark Cluster** icon opens a terminal and runs `sudo start-everything.sh` — the same interactive launcher used above.
+This generates icons at 256/128/64/48 px, drops a `.desktop` file on your desktop and in `~/.local/share/applications/`, and pins it to the GNOME dock. Clicking the icon opens a terminal and runs `sudo start-everything.sh` — the same interactive launcher used above.
 
 If the desktop icon shows a gear overlay (GNOME's "Untrusted Application" state), right-click → **Allow Launching** to trust it. The dock icon may need a logout/login the first time it appears.
 
@@ -106,35 +129,14 @@ To remove later:
 
 Requires `start-everything.sh` to already be installed (handled by `setup-llama.sh --node 1`) and Python Pillow for icon generation (auto-installed if missing).
 
-## Scaling to 3+ Nodes
+## Hot-Plugging Node 3
 
-1. Edit `cluster.conf`:
-   ```bash
-   NODE_COUNT=3
-
-   NODE3_IP="192.168.200.13"
-   NODE3_IP2="192.168.201.13"
-   ```
-
-2. On the new node:
-   ```bash
-   sudo ./setup-rdma.sh --node 3    # reboot
-   sudo ./setup-llama.sh --node 3
-   sudo ./setup-models.sh --node 3
-   ```
-
-3. Re-run on Node 1 to update launch scripts with the new worker:
-   ```bash
-   sudo ./setup-llama.sh --node 1
-   sudo ./setup-models.sh --node 1
-   ```
-
-The cluster launcher automatically discovers and connects to all reachable workers.
+Node 3 is portable — pull its cable and the cluster keeps running on Node 1 + Node 2 (256 GB total) without any reconfiguration. The launcher's worker-discovery step skips unreachable RPC endpoints automatically. Plug Node 3 back in and re-launch to bring 384 GB back online.
 
 ## Project Structure
 
 ```
-├── cluster.conf          # Central config — IPs, ports, node count
+├── cluster.conf          # Central config — IPs, ports, node count, llama.cpp pin
 ├── lib/common.sh         # Shared bash functions
 ├── setup-rdma.sh         # ConnectX-7 RDMA setup (--node N)
 ├── setup-llama.sh        # llama.cpp build & install (--node N)
@@ -149,7 +151,7 @@ The cluster launcher automatically discovers and connects to all reachable worke
 - All configuration in `cluster.conf` — change IPs once, not in N files
 - Common functions in `lib/common.sh` — no code duplication
 - Unified scripts with `--node N` flag — same script for all nodes
-- N-node scalable — add workers by editing one config file
+- Star topology with Node 1 as hub — no switch required, two cables total
 - `reset.sh` for clean restarts — removes services, configs, binaries
 
 ## Installed Components
@@ -255,8 +257,8 @@ Agents that fan out into parallel tool calls (e.g. opencode auditing a codebase)
 
 ## Requirements
 
-- 2+ NVIDIA DGX Spark (GB10, 128 GB unified memory each)
-- ConnectX-7 200GbE NICs (dual-port, direct-connect or via switch)
+- 3× NVIDIA DGX Spark (GB10, 128 GB unified memory each)
+- ConnectX-7 200GbE NICs — two direct-attach cables from Node 1 to each worker
 - Ubuntu 22.04+ (aarch64)
 - CUDA toolkit 13+
 - MLNX OFED drivers
