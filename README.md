@@ -109,6 +109,34 @@ cd ~/.lmstudio/models
 huggingface-cli download <org>/<model> --include '*Q4_K_M*' --local-dir .
 ```
 
+## In Action
+
+End-to-end run on the cluster — `start-everything.sh` boots the model across all three nodes, then opencode drives a 20-minute architecture audit of an external Tauri/Rust codebase against the local OpenAI-compatible API.
+
+**1. Launching the cluster** — `start-everything.sh` checks each worker, lists local GGUF models, and starts `llama-server` with the right `--rpc` endpoints and chat template auto-discovered.
+
+<p align="center">
+  <img src="assets/llama-1.png" alt="start-everything.sh interactive launcher" width="800">
+</p>
+
+**2. Agent connects** — opencode (1.14.19) talks to `http://192.168.200.11:8080/v1` and MiniMax-M2 starts walking the target codebase one tool call at a time.
+
+<p align="center">
+  <img src="assets/llama-start.png" alt="opencode session beginning the codebase audit" width="800">
+</p>
+
+**3. Mid-audit** — the model is producing concrete refactor recommendations with rationale and file/line references. ~88K tokens in, ~44% of the 200K context used.
+
+<p align="center">
+  <img src="assets/llama-mid.png" alt="MiniMax-M2 producing refactor recommendations mid-audit" width="800">
+</p>
+
+**4. Done** — 20m 11s wall-clock, 96.7K tokens, full audit written to `PS-Desktop-Audit-25APR26.md`.
+
+<p align="center">
+  <img src="assets/llama-finish.png" alt="opencode audit complete, results written to disk" width="800">
+</p>
+
 ## Desktop Launcher (optional)
 
 For one-click access from the GNOME desktop on Node 1:
@@ -259,6 +287,6 @@ Agents that fan out into parallel tool calls (e.g. opencode auditing a codebase)
 
 - 3× NVIDIA DGX Spark (GB10, 128 GB unified memory each)
 - ConnectX-7 200GbE NICs — two direct-attach cables from Node 1 to each worker
-- Ubuntu 22.04+ (aarch64)
+- DGX OS (NVIDIA's customized Ubuntu 24.04, aarch64)
 - CUDA toolkit 13+
 - MLNX OFED drivers
