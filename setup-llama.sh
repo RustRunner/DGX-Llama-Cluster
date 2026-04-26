@@ -248,10 +248,39 @@ else
     echo -e "\${YELLOW}Running in single-node mode\${NC}"
 fi
 
+# Auto-detect chat template override from upstream llama.cpp templates dir.
+# Some community-quantized GGUFs ship chat templates that don't trigger
+# llama.cpp's generalized auto-parser (e.g. MiniMax-M2.7 → tool calls leak as
+# raw <minimax:tool_call> XML). Pointing at the canonical upstream template
+# usually fixes it. We pick the longest-matching template name as a substring
+# of the model basename, so e.g. "Qwen3-Coder" wins over "Qwen3" when both exist.
+TEMPLATE_FLAG=""
+TEMPLATES_DIR="/opt/llama.cpp/models/templates"
+if [ -d "\$TEMPLATES_DIR" ]; then
+    MODEL_NAME=\$(basename "\$MODEL" | sed -E 's/-(Q[0-9]+_[KMSL].*|f16|bf16|fp16).*//; s/\\.gguf\$//')
+    BEST_TPL=""
+    BEST_LEN=0
+    for tpl in "\$TEMPLATES_DIR"/*.jinja; do
+        [ -f "\$tpl" ] || continue
+        TPL_BASE=\$(basename "\$tpl" .jinja)
+        if echo "\$MODEL_NAME" | grep -qiF "\$TPL_BASE"; then
+            TPL_LEN=\${#TPL_BASE}
+            if [ "\$TPL_LEN" -gt "\$BEST_LEN" ]; then
+                BEST_LEN=\$TPL_LEN
+                BEST_TPL="\$tpl"
+            fi
+        fi
+    done
+    if [ -n "\$BEST_TPL" ]; then
+        TEMPLATE_FLAG="--chat-template-file \$BEST_TPL"
+    fi
+fi
+
 echo ""
 echo -e "\${GREEN}Starting llama-server...\${NC}"
 echo "  Model: \$MODEL"
 echo "  RPC workers: \${RPC_FLAG:-none (single-node)}"
+echo "  Chat template: \${BEST_TPL:-(GGUF embedded)}"
 echo "  API: http://\$NODE1_IP:\$SERVER_PORT"
 echo "  OpenAI API: http://\$NODE1_IP:\$SERVER_PORT/v1"
 echo ""
@@ -271,6 +300,7 @@ exec llama-server \\
     -ctv q8_0 \\
     --parallel 1 \\
     -t 16 \\
+    \$TEMPLATE_FLAG \\
     \$RPC_FLAG \\
     \$EXTRA_ARGS
 LAUNCHEOF
@@ -309,6 +339,30 @@ fi
 
 shift
 
+# Auto-detect chat template override (see llama-cluster-start.sh for details)
+TEMPLATE_FLAG=""
+TEMPLATES_DIR="/opt/llama.cpp/models/templates"
+if [ -d "\$TEMPLATES_DIR" ]; then
+    MODEL_NAME=\$(basename "\$MODEL" | sed -E 's/-(Q[0-9]+_[KMSL].*|f16|bf16|fp16).*//; s/\\.gguf\$//')
+    BEST_TPL=""
+    BEST_LEN=0
+    for tpl in "\$TEMPLATES_DIR"/*.jinja; do
+        [ -f "\$tpl" ] || continue
+        TPL_BASE=\$(basename "\$tpl" .jinja)
+        if echo "\$MODEL_NAME" | grep -qiF "\$TPL_BASE"; then
+            TPL_LEN=\${#TPL_BASE}
+            if [ "\$TPL_LEN" -gt "\$BEST_LEN" ]; then
+                BEST_LEN=\$TPL_LEN
+                BEST_TPL="\$tpl"
+            fi
+        fi
+    done
+    if [ -n "\$BEST_TPL" ]; then
+        TEMPLATE_FLAG="--chat-template-file \$BEST_TPL"
+        echo "Chat template override: \$(basename \$BEST_TPL .jinja)"
+    fi
+fi
+
 exec llama-server \\
     --model "\$MODEL" \\
     --host 0.0.0.0 \\
@@ -322,6 +376,7 @@ exec llama-server \\
     -ub 512 \\
     --parallel 1 \\
     -t 16 \\
+    \$TEMPLATE_FLAG \\
     "\$@"
 LOCALEOF
 
