@@ -230,6 +230,21 @@ huggingface-cli download <org>/<model> --include '*Q4_K_M*' --local-dir .
 
 Both single-file (`.gguf`) and split models (`*-00001-of-*.gguf`) are supported.
 
+## Troubleshooting
+
+### "Activation of network failed" pop-ups on Node 1
+
+If your DGX Spark has onboard NICs alongside the ConnectX-7 ports, NetworkManager may keep trying to DHCP those unused interfaces and surface a recurring "activation of network failed" notification. The cluster doesn't use those ports, so just disable autoconnect on their NM profiles:
+
+```bash
+nmcli -t -f NAME,DEVICE connection show | grep -i wired   # find the offending profiles
+sudo nmcli connection modify "Wired connection 1" connection.autoconnect no
+sudo nmcli connection down   "Wired connection 1"
+# repeat for any other phantom profile
+```
+
+Fully reversible — flip `autoconnect` back to `yes` if you ever cable those ports up.
+
 ## Requirements
 
 - 2+ NVIDIA DGX Spark (GB10, 128 GB unified memory each)
