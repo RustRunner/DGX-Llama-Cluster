@@ -54,20 +54,31 @@ fi
 
 log "Building llama.cpp..."
 
+# Step A: ensure a working tree exists, fetch latest refs
 if [[ -d "$LLAMA_CPP_DIR" ]]; then
-    log "Existing build found at $LLAMA_CPP_DIR — updating..."
+    log "Existing source at $LLAMA_CPP_DIR — fetching refs..."
     cd "$LLAMA_CPP_DIR"
-    git pull --ff-only || {
+    git fetch --all --quiet || warn "git fetch failed, will use whatever local refs exist"
+else
+    log "Cloning llama.cpp..."
+    git clone "$LLAMA_CPP_REPO" "$LLAMA_CPP_DIR"
+    cd "$LLAMA_CPP_DIR"
+fi
+
+# Step B: select the commit — pinned (LLAMA_CPP_COMMIT set) or track master
+if [[ -n "${LLAMA_CPP_COMMIT:-}" ]]; then
+    log "Pinning llama.cpp to LLAMA_CPP_COMMIT=$LLAMA_CPP_COMMIT"
+    git checkout --quiet "$LLAMA_CPP_COMMIT" || \
+        error "Cannot checkout pinned commit '$LLAMA_CPP_COMMIT' — verify the SHA exists in the fetched refs"
+else
+    git checkout --quiet master 2>/dev/null || true
+    git pull --ff-only --quiet || {
         warn "git pull failed, doing a fresh clone..."
         cd /opt
         rm -rf "$LLAMA_CPP_DIR"
         git clone "$LLAMA_CPP_REPO" "$LLAMA_CPP_DIR"
         cd "$LLAMA_CPP_DIR"
     }
-else
-    log "Cloning llama.cpp..."
-    git clone "$LLAMA_CPP_REPO" "$LLAMA_CPP_DIR"
-    cd "$LLAMA_CPP_DIR"
 fi
 
 LLAMA_COMMIT=$(git rev-parse --short HEAD)
