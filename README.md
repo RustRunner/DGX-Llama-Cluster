@@ -141,6 +141,10 @@ End-to-end run on the cluster — `start-everything.sh` boots the model across a
 
 For one-click access from the GNOME desktop on Node 1:
 
+<p align="center">
+  <img src="assets/dgx-spark-stack.png" alt="DGX Spark Cluster desktop launcher icon" width="200">
+</p>
+
 ```bash
 ./install-launcher.sh        # no sudo — installs under ~/.local/share/
 ```
