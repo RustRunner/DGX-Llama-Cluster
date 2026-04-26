@@ -245,6 +245,14 @@ sudo nmcli connection down   "Wired connection 1"
 
 Fully reversible — flip `autoconnect` back to `yes` if you ever cable those ports up.
 
+### MiniMax tool calls fail with HTTP 500 / "Failed to parse input"
+
+Agents that fan out into parallel tool calls (e.g. opencode auditing a codebase) cause MiniMax-M2 to emit multiple `<invoke>` elements inside one `<minimax:tool_call>` block. llama.cpp ≥ commit `134d6e54d` (PR #20690, Apr 22 2026, "common/chat, server: refactor") fails to parse this and returns HTTP 500.
+
+`cluster.conf` ships with `LLAMA_CPP_COMMIT="ca7f7b7b9"` pinned to the last commit before that refactor — still includes native RDMA (Apr 15) and the earlier MiniMax single-call fix (Apr 8).
+
+**Tested working:** llama.cpp `ca7f7b7b9` + opencode `1.14.19`. Bump the pin only after confirming the upstream regression is fixed (quickest test: send a request prompting MiniMax to read several files at once and verify llama-server returns a proper `tool_calls` JSON).
+
 ## Requirements
 
 - 2+ NVIDIA DGX Spark (GB10, 128 GB unified memory each)
