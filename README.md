@@ -119,7 +119,7 @@ End-to-end run on the cluster — `start-everything.sh` boots the model across a
   <img src="assets/llama-1.png" alt="start-everything.sh interactive launcher" width="800">
 </p>
 
-**2. Agent connects** — opencode (1.14.19) talks to `http://192.168.200.11:8080/v1` and MiniMax-M2 starts walking the target codebase one tool call at a time.
+**2. Agent connects** — opencode (1.14.19) talks to `http://192.168.200.11:8080/v1` and MiniMax-2.7 starts walking the target codebase one tool call at a time.
 
 <p align="center">
   <img src="assets/llama-start.png" alt="opencode session beginning the codebase audit" width="800">
@@ -128,7 +128,7 @@ End-to-end run on the cluster — `start-everything.sh` boots the model across a
 **3. Mid-audit** — the model is producing concrete refactor recommendations with rationale and file/line references. ~88K tokens in, ~44% of the 200K context used.
 
 <p align="center">
-  <img src="assets/llama-mid.png" alt="MiniMax-M2 producing refactor recommendations mid-audit" width="800">
+  <img src="assets/llama-mid.png" alt="MiniMax-2.7 producing refactor recommendations mid-audit" width="800">
 </p>
 
 **4. Done** — 20m 11s wall-clock, 96.7K tokens, full audit written to `PS-Desktop-Audit-25APR26.md`.
@@ -140,7 +140,7 @@ End-to-end run on the cluster — `start-everything.sh` boots the model across a
 **Quick test of WebUI inference.**
 
 <p align="center">
-  <img src="assets/llamacpp-web.png" alt="llama.cpp built-in WebUI rendering MiniMax-M2.7 reasoning + math" width="800">
+  <img src="assets/llamacpp-web.png" alt="llama.cpp built-in WebUI rendering MiniMax-2.7 reasoning + math" width="800">
 </p>
 
 ## Desktop Launcher (optional)
@@ -287,11 +287,9 @@ Fully reversible — flip `autoconnect` back to `yes` if you ever cable those po
 
 ### MiniMax tool calls fail with HTTP 500 / "Failed to parse input"
 
-Agents that fan out into parallel tool calls (e.g. opencode auditing a codebase) cause MiniMax-M2 to emit multiple `<invoke>` elements inside one `<minimax:tool_call>` block. llama.cpp ≥ commit `134d6e54d` (PR #20690, Apr 22 2026, "common/chat, server: refactor") fails to parse this and returns HTTP 500.
+Agents that fan out into parallel tool calls (e.g. opencode auditing a codebase) cause MiniMax-2.7 to emit multiple `<invoke>` elements inside one `<minimax:tool_call>` block. PR #20690 (Apr 22 2026, "common/chat, server: refactor") broke parsing of that shape, and PR #22353 (Apr 25, "fix handling of space in reasoning markers") re-broke it after a partial fix. **PR #22654** (May 4 2026, "common/autoparser: fixes for newline handling / forced tool calls", commit `a4701c98f`) is the upstream fix — confirmed by maintainer on PR #22106.
 
-`cluster.conf` ships with `LLAMA_CPP_COMMIT="ca7f7b7b9"` pinned to the last commit before that refactor — still includes native RDMA (Apr 15) and the earlier MiniMax single-call fix (Apr 8).
-
-**Tested working:** llama.cpp `ca7f7b7b9` + opencode `1.14.19`. Bump the pin only after confirming the upstream regression is fixed (quickest test: send a request prompting MiniMax to read several files at once and verify llama-server returns a proper `tool_calls` JSON).
+`cluster.conf` now pins `LLAMA_CPP_COMMIT="1e5ad35d5"` (May 10 2026 master), which includes PR #22654. If you bump the pin further, smoke-test with a parallel-tool-call request before declaring it good (quickest: prompt MiniMax-2.7 to read several files at once and verify llama-server returns a proper `tool_calls` JSON instead of a 500).
 
 ## Requirements
 

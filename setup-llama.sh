@@ -702,8 +702,11 @@ EOF
     systemctl enable llama-rpc.service
     log "RPC worker service created and enabled (auto-starts on boot)"
 
-    log "Starting RPC worker..."
-    systemctl start llama-rpc.service
+    # restart (not start) so that re-running setup-llama.sh after a binary
+    # rebuild reloads the new rpc-server — `start` is a no-op when the
+    # service is already running and would leave the old binary mapped.
+    log "Restarting RPC worker to pick up the freshly built rpc-server..."
+    systemctl restart llama-rpc.service
     sleep 2
 
     if systemctl is-active llama-rpc.service &>/dev/null; then
