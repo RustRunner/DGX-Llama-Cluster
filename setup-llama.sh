@@ -226,6 +226,15 @@ fi
 shift
 EXTRA_ARGS="\$@"
 
+# Default context size — only applied if the caller didn't pass their own
+# -c/--ctx-size, otherwise llama-server warns about duplicate -c.
+CTX_FLAG="-c 200000"
+for arg in "\$@"; do
+    case "\$arg" in
+        -c|--ctx-size) CTX_FLAG=""; break ;;
+    esac
+done
+
 # Check each RPC worker
 echo -e "\${GREEN}Checking RPC workers (\${#WORKER_IPS[@]} configured)...\${NC}"
 RPC_ENDPOINTS=()
@@ -304,7 +313,7 @@ exec llama-server \\
     -fa on \\
     --no-mmap \\
     --jinja \\
-    -c 200000 \\
+    \$CTX_FLAG \\
     -b 4096 \\
     -ub 4096 \\
     -ctk q8_0 \\
@@ -565,13 +574,28 @@ echo ""
 
 if [ "\$RPC_AVAILABLE" = true ]; then
     echo -e "Launching with \${CYAN}llama-cluster-start.sh\${NC} (multi-node)..."
-    echo ""
-    exec llama-cluster-start.sh "\$SELECTED" -c "\$CTX_SIZE"
+    LAUNCHER=llama-cluster-start.sh
 else
     echo -e "Launching with \${CYAN}llama-local-start.sh\${NC} (single-node)..."
-    echo ""
-    exec llama-local-start.sh "\$SELECTED" -c "\$CTX_SIZE"
+    LAUNCHER=llama-local-start.sh
 fi
+echo ""
+
+# Run the launcher inline (no exec) so we can keep the window open if it
+# exits — desktop-launcher gnome-terminal otherwise closes the moment
+# llama-server dies, swallowing the error.
+"\$LAUNCHER" "\$SELECTED" -c "\$CTX_SIZE"
+RC=\$?
+
+echo ""
+if [ \$RC -eq 0 ]; then
+    echo -e "\${GREEN}llama-server exited cleanly.\${NC}"
+else
+    echo -e "\${RED}llama-server exited with code \$RC.\${NC}"
+fi
+read -n 1 -s -r -p "Press any key to close..."
+echo ""
+exit \$RC
 STARTEOF
 
     chmod +x /usr/local/bin/start-everything.sh
